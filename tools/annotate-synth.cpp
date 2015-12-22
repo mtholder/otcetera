@@ -15,12 +15,15 @@ using std::string;
 using std::map;
 using std::pair;
 
+// Add an instantiation of std::hash< > for pair<string,json> so that we can use unordered_map & unordered_set.
 template<>
 struct std::hash<std::pair<string,json>>
 {
     std::size_t operator()(const std::pair<string,json>& p) const noexcept {return std::hash<string>()(p.first) * std::hash<json>()(p.second);}
 };
 
+// The node data: record the @depth to speed up MRCA queries.
+//                @mark is used as a bitvector.
 struct RTNodeDepth {
     int depth = 0; // depth = number of nodes to the root of the tree including the  endpoints (so depth of root = 1s)
     int mark = 0;
@@ -110,6 +113,7 @@ Tree_t::node_type* trace_to_parent(Tree_t::node_type* node, int bits) {
     return node;
 }
 
+/// Find the root of a tree from a node
 Tree_t::node_type* get_root(Tree_t::node_type* node) {
     while (node->getParent()) {
         node = node->getParent();
@@ -117,6 +121,7 @@ Tree_t::node_type* get_root(Tree_t::node_type* node) {
     return node;
 }
 
+/// Find the root of a tree from a node
 const Tree_t::node_type* get_root(const Tree_t::node_type* node)
 {
     while (node->getParent()){
@@ -425,14 +430,19 @@ struct DisplayedStatsState : public TaxonomyDependentTreeProcessor<Tree_t> {
         string source_name = source_from_tree_name(tree.getName());
         document["sources"].push_back(source_name);
         
+        // How does each node of the input tree map to the synthesis tree?
         for(const auto nd: iter_post_const(tree))
         {
             if (not nd->getParent()) continue;
 
+            // Trace the include group in the summary tree, marking with bit 1
             auto MRCA_include = trace_include_group_find_MRCA(nd, 1);
             assert(not is_marked(MRCA_include,2));
+            // Trace the exclude group in the summary tree, marking with bit 2
             auto MRCA_exclude = trace_exclude_group_find_MRCA(nd, 1, 2);
 
+            // Connect the two groups up to the MRCA of both include & exclude.
+            // Since the root is in the exclude group, mark branch between the MRCA and the exclude MRCA with bit 2.
             MRCA_exclude = trace_find_MRCA(MRCA_include, MRCA_exclude, 0, 2);
 
             if (nd->isTip())
@@ -441,6 +451,7 @@ struct DisplayedStatsState : public TaxonomyDependentTreeProcessor<Tree_t> {
                 for(auto path_node = MRCA_include;path_node and not is_marked(path_node,2);path_node = path_node->getParent())
                     set_terminal(path_node, nd, tree);
             }
+            // include group separated from exclude group.
             else if (mark(MRCA_include) == 1)
             {
                 if (MRCA_include->getParent() and mark(nmParent(MRCA_include)) == 2)
@@ -557,22 +568,31 @@ int main(int argc, char *argv[]) {
                   "Don't print information about terminals.",
                   handleSuppressTerminals,
                   false);
+
+    // Read in the taxonomy tree and synthetic tree, updating object 'proc'.
     taxDependentTreeProcessingMain(otCLI, argc, argv, proc, 2, true);
+
+    // Event loop: treat each line we read as a list of study tree names.
     string line;
     while(getline(std::cin,line))
     {
         try {
+            // Split the line into a series of filenames
             std::istringstream iss(line);
             vector<string> filenames;
             copy(std::istream_iterator<string>(iss),
                  std::istream_iterator<string>(),
                  back_inserter(filenames));
+
+            //  Create anonymous function object to ingest trees we read in.
             std::function<bool(std::unique_ptr<Tree_t>)> analyze =
                 [&proc,&otCLI](std::unique_ptr<Tree_t> t)
                 {
                     proc.mapNextTree(otCLI,*t,false);
                     return true;
                 };
+
+            // Clear input trees, read in new trees for this input line, and generate a JSON report.
             proc.reset();
             for(const auto& filename : filenames)
                 processTrees(filename, otCLI.getParsingRules(), analyze);
