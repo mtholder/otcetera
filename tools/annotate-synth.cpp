@@ -269,6 +269,7 @@ struct DisplayedStatsState : public TaxonomyDependentTreeProcessor<Tree_t> {
     std::unordered_set<pair<string,json>> terminal_set;
     int numErrors = 0;
     bool treatTaxonomyAsLastTree = false;
+    bool conflictOnly = false;
     bool headerEmitted = false;
 
     virtual ~DisplayedStatsState(){}
@@ -323,7 +324,26 @@ struct DisplayedStatsState : public TaxonomyDependentTreeProcessor<Tree_t> {
         }
     }
 
+    void reset() {
+        document = {};
+
+        supported_by.clear();
+        partial_path_of.clear();
+        conflicts_with.clear();
+        could_resolve.clear();
+        terminal.clear();
+
+        supported_by_set.clear();
+        partial_path_of_set.clear();
+        conflicts_with_set.clear();
+        could_resolve_set.clear();
+        terminal_set.clear();
+    }
+
     bool summarize(OTCLI &otCLI) override {
+        return true;
+    }
+    bool report(OTCLI &otCLI) {
         if (treatTaxonomyAsLastTree) {
             mapNextTree(otCLI, *taxonomy, true);
         }
@@ -388,12 +408,17 @@ struct DisplayedStatsState : public TaxonomyDependentTreeProcessor<Tree_t> {
                 nodes[name] = node;
         }
         document["nodes"] = nodes;
+        if (conflictOnly)
+            document = document["nodes"];
         std::cout<<document.dump(4)<<std::endl;
         return true;
     }
 
-    void mapNextTree(OTCLI & , const Tree_t & tree, bool ) //isTaxoComp is third param
+    void mapNextTree(OTCLI & , Tree_t & tree, bool ) //isTaxoComp is third param
     {
+        computeDepth(tree);
+        computeSummaryNodes(tree, summaryOttIdToNode);
+
         vector<Tree_t::node_type*> conflicts;
         string source_name = source_from_tree_name(tree.getName());
         document["sources"].push_back(source_name);
@@ -463,24 +488,24 @@ struct DisplayedStatsState : public TaxonomyDependentTreeProcessor<Tree_t> {
         return true;
     }
 
+    bool processSummaryTree(OTCLI & otCLI, std::unique_ptr<Tree_t> tree) {
+        summaryTree = std::move(tree);
+        for(auto nd: iter_post(*summaryTree))
+            if (nd->hasOttId())
+                summaryOttIdToNode[nd->getOttId()] = nd;
+        return true;
+    }
+
     bool processSourceTree(OTCLI & otCLI, std::unique_ptr<Tree_t> tree) override {
         computeDepth(*tree);
         assert(taxonomy != nullptr);
-        if (summaryTree == nullptr) {
-            summaryTree = std::move(tree);
-            for(auto nd: iter_post(*summaryTree))
-                if (nd->hasOttId())
-                    summaryOttIdToNode[nd->getOttId()] = nd;
-            return true;
-        }
+        if (summaryTree == nullptr)
+            return processSummaryTree(otCLI, std::move(tree));
         requireTipsToBeMappedToTerminalTaxa(*tree, taxOttIdToNode);
-        computeDepth(*tree);
-        computeSummaryLeaves(*tree, summaryOttIdToNode);
 
         mapNextTree(otCLI, *tree, false);
         return true;
     }
-
 };
 bool handleCountTaxonomy(OTCLI & otCLI, const std::string &);
 
@@ -491,15 +516,52 @@ bool handleCountTaxonomy(OTCLI & otCLI, const std::string &) {
     return true;
 }
 
+bool handleConflictOnly(OTCLI & otCLI, const std::string &) {
+    DisplayedStatsState * proc = static_cast<DisplayedStatsState *>(otCLI.blob);
+    assert(proc != nullptr);
+    proc->conflictOnly = true;
+    return true;
+}
+
+// idea: Read from std::cin.
+//       Read the taxonomy and full synthesis tree (eventually just the synth tree) to define the problem.
+//       Each line contains a number of trees that are processed at once.
+//       Before processing each line, the 'reset()' function is called.
+//       After processing each line, the summarize command is called.
+
 int main(int argc, char *argv[]) {
-    std::string explanation{"takes at least 2 newick file paths: a taxonomy, a full supertree, and some number of input trees.\n"};
+    std::string explanation{"takes a newick file paths for a full supertree.\n"
+            "It reads then reads lines from standard input, where each line represents a set of input trees."};
     OTCLI otCLI("otc-annotate-synth",
                 explanation.c_str(),
-                "taxonomy.tre synth.tre inp1.tre inp2.tre ...");
+                "taxonomy.tre synth.tre < inp.tre");
     DisplayedStatsState proc;
     otCLI.addFlag('x',
                   "Automatically treat the taxonomy as an input in terms of supporting groups",
                   handleCountTaxonomy,
                   false);
-    return taxDependentTreeProcessingMain(otCLI, argc, argv, proc, 2, true);
+    otCLI.addFlag('c',
+                  "Just print conflict information.",
+                  handleConflictOnly,
+                  false);
+    taxDependentTreeProcessingMain(otCLI, argc, argv, proc, 2, true);
+    string line;
+    while(getline(std::cin,line))
+    {
+        std::istringstream iss(line);
+        vector<string> filenames;
+        copy(std::istream_iterator<string>(iss),
+             std::istream_iterator<string>(),
+             back_inserter(filenames));
+        std::function<bool(std::unique_ptr<Tree_t>)> analyze =
+            [&proc,&otCLI](std::unique_ptr<Tree_t> t)
+            {
+                proc.mapNextTree(otCLI,*t,false);
+                return true;
+            };
+        proc.reset();
+        for(const auto& filename : filenames)
+            processTrees(filename, otCLI.getParsingRules(), analyze);
+        proc.report(otCLI);
+    }
 }
