@@ -271,6 +271,7 @@ struct DisplayedStatsState : public TaxonomyDependentTreeProcessor<Tree_t> {
     bool treatTaxonomyAsLastTree = false;
     bool conflictOnly = false;
     bool headerEmitted = false;
+    bool suppressTerminals = false;
 
     virtual ~DisplayedStatsState(){}
 
@@ -368,6 +369,7 @@ struct DisplayedStatsState : public TaxonomyDependentTreeProcessor<Tree_t> {
                 if (not j_supported_by.empty())
                     node["supported_by"] = j_supported_by;
             }
+            if (not suppressTerminals)
             {
                 json j_terminal = json::array();
 
@@ -523,6 +525,13 @@ bool handleConflictOnly(OTCLI & otCLI, const std::string &) {
     return true;
 }
 
+bool handleSuppressTerminals(OTCLI & otCLI, const std::string &) {
+    DisplayedStatsState * proc = static_cast<DisplayedStatsState *>(otCLI.blob);
+    assert(proc != nullptr);
+    proc->suppressTerminals = true;
+    return true;
+}
+
 // idea: Read from std::cin.
 //       Read the taxonomy and full synthesis tree (eventually just the synth tree) to define the problem.
 //       Each line contains a number of trees that are processed at once.
@@ -544,24 +553,35 @@ int main(int argc, char *argv[]) {
                   "Just print conflict information.",
                   handleConflictOnly,
                   false);
+    otCLI.addFlag('t',
+                  "Don't print information about terminals.",
+                  handleSuppressTerminals,
+                  false);
     taxDependentTreeProcessingMain(otCLI, argc, argv, proc, 2, true);
     string line;
     while(getline(std::cin,line))
     {
-        std::istringstream iss(line);
-        vector<string> filenames;
-        copy(std::istream_iterator<string>(iss),
-             std::istream_iterator<string>(),
-             back_inserter(filenames));
-        std::function<bool(std::unique_ptr<Tree_t>)> analyze =
-            [&proc,&otCLI](std::unique_ptr<Tree_t> t)
-            {
-                proc.mapNextTree(otCLI,*t,false);
-                return true;
-            };
-        proc.reset();
-        for(const auto& filename : filenames)
-            processTrees(filename, otCLI.getParsingRules(), analyze);
-        proc.report(otCLI);
+        try {
+            std::istringstream iss(line);
+            vector<string> filenames;
+            copy(std::istream_iterator<string>(iss),
+                 std::istream_iterator<string>(),
+                 back_inserter(filenames));
+            std::function<bool(std::unique_ptr<Tree_t>)> analyze =
+                [&proc,&otCLI](std::unique_ptr<Tree_t> t)
+                {
+                    proc.mapNextTree(otCLI,*t,false);
+                    return true;
+                };
+            proc.reset();
+            for(const auto& filename : filenames)
+                processTrees(filename, otCLI.getParsingRules(), analyze);
+            proc.report(otCLI);
+        }
+        catch (std::exception & x) {
+            json document;
+            document["exception"] = x.what();
+            std::cout<<document.dump(4)<<std::endl;
+        }
     }
 }
