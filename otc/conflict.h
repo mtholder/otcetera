@@ -196,9 +196,12 @@ void perform_conflict_analysis(const Tree1_t& tree1,
         // Since nd is not a tip, and not monotypic, it should have at least 2 leaves below it.
         assert(leaves1.size() >= 2);
 
-        int L2 = 0;
+        // Compute total number of tips for the include set.
+        // This is tricky, because nodes that are tips now, may not have been tips before.
+        // This is because we prune aligned nodes.
+        int total_include_tips = 0;
         for(auto nd: leaves1) {
-            L2 += n_tips(nd);
+            total_include_tips += n_tips(nd);
         }
 
         // Find the corresponding list of nodes in the summary tree
@@ -250,7 +253,7 @@ void perform_conflict_analysis(const Tree1_t& tree1,
         // Record nodes of T2 that conflict with node nd of t1.
         conflicts.clear();
         for(auto nd: nodes) {
-            if (node_conflicts(nd, L2)) {
+            if (node_conflicts(nd, total_include_tips)) {
                 conflicts.push_back(nd);
             }
         }
