@@ -81,6 +81,14 @@ inline ConflictTree::node_type*& summary_node(ConflictTree::node_type* node) {
     return node->get_data().summary_node;
 }
 
+// If nd has (a) some, but not all, of the include group
+//           (b) any of the exclude group,
+// then nd conflicts with with the split include|exclude.
+bool node_conflicts(const ConflictTree::node_type* nd, int total_include_tips)
+{
+    return n_include_tips(nd) < n_tips(nd) and n_include_tips(nd) < total_include_tips;
+}
+
 // This procedure finds examples of (y supported_by x), (y partial_path of x), (y conflicts_with x), (y resolved_by y), and (y terminal x),
 //   where y is a node of tree2 and x is a node of tree1.
 //
@@ -239,14 +247,14 @@ void perform_conflict_analysis(const Tree1_t& tree1,
             }
         }
 
+        // Record nodes of T2 that conflict with node nd of t1.
         conflicts.clear();
         for(auto nd: nodes) {
-            // If we have (a) some, but not all of the include group
-            //            (b) any of the exclude group
-            if (n_include_tips(nd) < n_tips(nd) and n_include_tips(nd) < L2) {
+            if (node_conflicts(nd, L2)) {
                 conflicts.push_back(nd);
             }
         }
+
         for(auto nd: nodes) {
             n_include_tips(nd) = 0;
         }
