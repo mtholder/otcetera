@@ -241,10 +241,10 @@ void perform_conflict_analysis(const Tree1_t& tree1,
         // Supported_by or partial_path_of
         if (not conflicts_or_resolved_by) {
             assert(MRCA->get_parent());
-            if (MRCA->get_parent()->get_data().n_tips > MRCA->get_data().n_tips) {
+            if (n_tips(MRCA->get_parent()) > n_tips(MRCA)) {
                 log_supported_by(MRCA, nd);
             } else {
-                for(auto nd2 = MRCA; nd2 and nd2->get_data().n_tips == MRCA->get_data().n_tips; nd2 = nd2->get_parent()) {
+                for(auto nd2 = MRCA; nd2 and n_tips(nd2) == n_tips(MRCA); nd2 = nd2->get_parent()) {
                     log_partial_path_of(nd2, nd);
                 }
             }
