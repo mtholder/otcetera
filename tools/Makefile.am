@@ -51,6 +51,7 @@ bin_PROGRAMS = otc-assert-invariants \
 				otc-name-unnamed-nodes \
 				otc-unprune-solution-and-name-unnamed-nodes \
 				otc-annotate-synth \
+				otc-annotate-synth2 \
 				otc-taxonomy-parser \
 				otc-relabel-tree \
 				otc-tree-tool \
@@ -139,6 +140,9 @@ otc_name_unnamed_nodes_CPPFLAGS = $(AM_CPPFLAGS)
 
 otc_annotate_synth_SOURCES = annotate-synth.cpp
 otc_annotate_synth_CPPFLAGS = $(AM_CPPFLAGS)
+
+otc_annotate_synth2_SOURCES = annotate-synth2.cpp
+otc_annotate_synth2_CPPFLAGS = $(AM_CPPFLAGS)
 
 otc_conflict_stats_SOURCES = conflict-stats.cpp
 otc_conflict_stats_CPPFLAGS = $(AM_CPPFLAGS)

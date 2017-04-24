@@ -72,6 +72,7 @@ struct ConflictNode {
 using ConflictTree = otc::RootedTree<ConflictNode, otc::RTreeNoData>;
 
 using node_logger_t = std::function<void(const ConflictTree::node_type* node2, const ConflictTree::node_type* node1)>;
+using attachment_pt_logger_t = std::function<void(const std::vector<const ConflictTree::node_type*>& nodes2, const ConflictTree::node_type* node1)>;
 
 inline ConflictTree::node_type* summary_node(const ConflictTree::node_type* node) {
     return node->get_data().summary_node;
@@ -297,7 +298,8 @@ void perform_conflict_analysis2(const Tree1_t& tree1,
                                node_logger_t log_partial_path_of,
                                node_logger_t log_conflicts_with,
                                node_logger_t log_resolved_by,
-                               node_logger_t log_terminal) {
+                               node_logger_t log_terminal,
+                               attachment_pt_logger_t log_attachment_pts) {
     auto induced_tree1 = get_induced_tree<Tree1_t,Tree2_t,ConflictTree>(tree1,
                                                                         ottid_to_node1,
                                                                         MRCA_of_pair1,
@@ -318,6 +320,7 @@ void perform_conflict_analysis2(const Tree1_t& tree1,
     compute_tips(*induced_tree2);
 
     std::vector<ConflictTree::node_type*> conflicts;
+    std::vector<const ConflictTree::node_type*> attachment_points;
 
 //    auto map1 = get_ottid_to_node_map(*induced_tree1);
     auto map2 = get_ottid_to_node_map(*induced_tree2);
@@ -425,11 +428,19 @@ void perform_conflict_analysis2(const Tree1_t& tree1,
 
         // Record nodes of T2 that conflict with node nd of t1.
         conflicts.clear();
-        for(auto nd: nodes) {
-            if (node_conflicts(nd, total_include_tips)) {
+        attachment_points.clear();
+        for(auto nd: nodes)
+        {
+            if (node_conflicts(nd, total_include_tips))
                 conflicts.push_back(nd);
-            }
+
+            if (nd->get_parent() and not node_conflicts(nd, total_include_tips) and node_conflicts(nd->get_parent(), total_include_tips))
+                attachment_points.push_back(nd);
         }
+
+        // Check that conflicts and attachment points are consistent
+        if (conflicts.empty()) assert(not attachment_points.empty());
+        if (attachment_points.empty()) assert(conflicts.empty());
 
         for(auto nd: nodes) {
             n_include_tips(nd) = 0;
@@ -438,7 +449,11 @@ void perform_conflict_analysis2(const Tree1_t& tree1,
         for(auto conflicting_node: conflicts) {
             log_conflicts_with(conflicting_node, nd);
         }
-
+        if (not attachment_points.empty())
+        {
+            log_attachment_pts(attachment_points, nd);
+        }
+        
         if (conflicts.empty() and conflicts_or_resolved_by) {
             log_resolved_by(MRCA, nd);
         }
