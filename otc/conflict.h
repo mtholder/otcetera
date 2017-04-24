@@ -276,7 +276,7 @@ void perform_conflict_analysis(const Tree1_t& tree1,
         }
 #endif
 
-        // nd -> MRCA
+        // If nd aligns to MRCA, then delete their children, making them tips, and map nd -> MRCA
         if (not conflicts_or_resolved_by) {
             summary_node(nd) = MRCA;
             destroy_children(nd);
@@ -449,7 +449,7 @@ void perform_conflict_analysis2(const Tree1_t& tree1,
         }
 #endif
 
-        // nd -> MRCA
+        // If nd aligns to MRCA, then delete their children, making them tips, and map nd -> MRCA
         if (not conflicts_or_resolved_by) {
             summary_node(nd) = MRCA;
             destroy_children(nd);
