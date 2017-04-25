@@ -54,10 +54,27 @@ std::vector<N*> leaf_nodes_below(N* node) {
 }
 
 template <typename N>
+void find_leaf_nodes_below(N* node, const std::function<bool(N*)>& pred, std::vector<N*>& nodes) {
+    if (pred(node))
+	nodes.push_back(node);
+    else
+	for(auto c = node->get_first_child();c;c = c->get_next_sib())
+	    find_leaf_nodes_below(c, pred, nodes);
+}
+
+template <typename N>
+std::vector<N*> leaf_nodes_below(N* node, const std::function<bool(N*)>& pred) {
+    std::vector<N*> nodes;
+    find_leaf_nodes_below(node, pred, nodes);
+    return nodes;
+}
+
+template <typename N>
 std::vector<N*> map_to_summary(const std::vector<const N*>& nodes) {
     std::vector<N*> nodes2(nodes.size(),nullptr);
     for(int i=0;i<(int)nodes2.size();i++) {
         nodes2[i] = summary_node(nodes[i]);
+	assert(nodes2[i]);
     }
     return nodes2;
 }
@@ -81,6 +98,8 @@ inline ConflictTree::node_type* summary_node(const ConflictTree::node_type* node
 inline ConflictTree::node_type*& summary_node(ConflictTree::node_type* node) {
     return node->get_data().summary_node;
 }
+
+bool is_aligned(const ConflictTree::node_type* node) {return summary_node(node) != nullptr;}
 
 // If nd has (a) some, but not all, of the include group
 //           (b) any of the exclude group,
@@ -329,6 +348,7 @@ void perform_conflict_analysis2(const Tree1_t& tree1,
     for(auto leaf: iter_leaf(*induced_tree1)) {
         auto leaf2 = map2.at(leaf->get_ott_id());
         summary_node(leaf) = leaf2;
+        summary_node(leaf2) = leaf;
     }
         
     auto L = count_leaves(*induced_tree1);
@@ -367,7 +387,7 @@ void perform_conflict_analysis2(const Tree1_t& tree1,
         }
 
         // Find the list of nodes in the input tree that are below nd.
-        std::vector<const node_type*> leaves1 = leaf_nodes_below(const_cast<const node_type*>(nd));
+        std::vector<const node_type*> leaves1 = leaf_nodes_below<const node_type>(nd, is_aligned);
 
         // Since nd is not a tip, and not monotypic, it should have at least 2 leaves below it.
         assert(leaves1.size() >= 2);
@@ -400,7 +420,7 @@ void perform_conflict_analysis2(const Tree1_t& tree1,
         if (nodes.size() > 1) {
             for(std::size_t i=0;i<nodes.size()-1;i++) {
                 auto nd = nodes[i];
-                if (nd->is_tip()) {
+                if (is_aligned(nd)) {
                     n_include_tips(nd) = n_tips(nd);
                 }
                 auto p = nd->get_parent();
@@ -429,13 +449,21 @@ void perform_conflict_analysis2(const Tree1_t& tree1,
         // Record nodes of T2 that conflict with node nd of t1.
         conflicts.clear();
         attachment_points.clear();
-        for(auto nd: nodes)
+        for(auto nd2: nodes)
         {
-            if (node_conflicts(nd, total_include_tips))
-                conflicts.push_back(nd);
+            if (node_conflicts(nd2, total_include_tips))
+	    {
+                conflicts.push_back(nd2);
 
-            if (nd->get_parent() and not node_conflicts(nd, total_include_tips) and node_conflicts(nd->get_parent(), total_include_tips))
-                attachment_points.push_back(nd);
+		// if the node is aligned (and is being counted as a tip) then any children will NOT conflict
+		if (is_aligned(nd2))
+		    for(auto c = nd2->get_first_child();c;c=c->get_next_sib())
+			attachment_points.push_back(c);
+	    }
+	    else if (nd2 != MRCA and n_include_tips(nd2->get_parent()) < n_tips(nd2->get_parent()))
+	    {
+                attachment_points.push_back(nd2);
+	    }
         }
 
         // Check that conflicts and attachment points are consistent
@@ -464,12 +492,12 @@ void perform_conflict_analysis2(const Tree1_t& tree1,
         }
 #endif
 
-        // If nd aligns to MRCA, then delete their children, making them tips, and map nd -> MRCA
-        if (not conflicts_or_resolved_by) {
+        // If nd aligns to MRCA, then map nd <-> MRCA, making them counted as tips.
+        if (not conflicts_or_resolved_by)
+	{
             summary_node(nd) = MRCA;
-            destroy_children(nd);
-            destroy_children(MRCA);
-        }
+            summary_node(MRCA) = nd;
+	}
     }
 }
 
