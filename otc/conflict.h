@@ -66,7 +66,7 @@ struct ConflictNode {
     int depth = 0; // depth = number of nodes to the root of the tree including the  endpoints (so depth of root = 1)
     int n_tips = 0;
     int n_include_tips = 0;
-    otc::RootedTreeNode<ConflictNode>* summary_node;
+    otc::RootedTreeNode<ConflictNode>* summary_node = nullptr;
 };
 
 using ConflictTree = otc::RootedTree<ConflictNode, otc::RTreeNoData>;
