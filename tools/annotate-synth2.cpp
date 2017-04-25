@@ -191,7 +191,7 @@ map<string, set<pair<string, string>>> conflicts_with_set;
 map<string, set<pair<string, string>>> resolves_set;
 map<string, set<pair<string, string>>> resolved_by_set;
 map<string, set<pair<string, string>>> terminal_set;
-map<string, set<string>> attachment_points;
+Map<string, string> attachment_points;
 
 int numErrors = 0;
 bool headerEmitted = false;
@@ -246,17 +246,15 @@ json gen_json(const Tree_t& summaryTree, const map<string,string>& monotypic_nod
             }
         }
     }
+    document["attachment_points"] = get_support_blob_as_array(attachment_points);
     document["nodes"] = nodes;
     return document;
 }
 
 void log_attachment_points(const std::vector<const ConflictTree::node_type*>& nodes2, const ConflictTree::node_type* node1)
 {
-    set<string> names;
     for(auto node2: nodes2)
-        names.insert(node2->get_name());
-    for(auto node2: nodes2)
-        attachment_points.insert({node1->get_name(),names});
+        attachment_points.insert({node1->get_name(),node2->get_name()});
 }
 
 void mapNextTree(const Tree_t& summaryTree,
