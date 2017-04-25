@@ -439,7 +439,7 @@ void perform_conflict_analysis2(const Tree1_t& tree1,
         }
 
         // Check that conflicts and attachment points are consistent
-        if (conflicts.empty()) assert(not attachment_points.empty());
+        if (conflicts.empty()) assert(attachment_points.empty());
         if (attachment_points.empty()) assert(conflicts.empty());
 
         for(auto nd: nodes) {
