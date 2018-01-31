@@ -977,53 +977,63 @@ json get_node_status(const string& witness, string status, const RichTaxonomy& T
     return j;
 }
 
-json get_conflict_node_status(const set<pair<string,int>>& witnesses, string status, const RichTaxonomy& Tax) {
-    json j;
-    string first_witness = witnesses.begin()->first;
-    j["witness"] = extract_node_name_if_present(witnesses.begin()->first);
-    j["status"] = std::move(status);
+optional<string> get_taxon_name_from_node_name(const string& name, const RichTaxonomy& Tax)
+{
+    long raw_ott_id = long_ott_id_from_name(name);
 
-    // Compute first 3 witnesses as name + name + name + ...
-    string witness_names;
-    int total = 0;
-    for(auto& witness: witnesses)
+    if (raw_ott_id < 0) return boost::none;
+
+    OttId id = check_ott_id_size(raw_ott_id);
+
+    auto nd = Tax.included_taxon_from_id(id);
+
+    if (not nd) return boost::none;
+
+    return nd->get_name();
+}
+
+json get_conflict_node_status(const set<pair<string,int>>& witness_nodes, string status, const RichTaxonomy& Tax)
+{
+    constexpr int max_witnesses = 3;
+
+    // 1. Divide witnesses (e.g. conflicting nodes) into those with names and those without.
+    list<pair<string,optional<string>>> named_witnesses;
+
+    for(auto& witness: witness_nodes)
     {
-	long raw_ott_id = long_ott_id_from_name(witness.first);
+	string node_name = extract_node_name_if_present(witness.first);
 
-	if (raw_ott_id < 0) continue;
-
-	OttId id = check_ott_id_size(raw_ott_id);
-
-	auto nd = Tax.included_taxon_from_id(id);
-
-	if (nd == nullptr) continue;
-
-	string witness_name  = nd->get_name();
-	
-	witness_name = witness_name + "[" + std::to_string(witness.second) + "]"; // record depth from root
-
-	if (total > 2)
-	{
-	    witness_names += " + ...";
-	    break;
-	}
-	else if (total == 0)
-	{
-	    witness_names = witness_name;
-	}
+	if (auto witness_name = get_taxon_name_from_node_name(witness.first, Tax))
+	    named_witnesses.push_front({node_name, *witness_name});
 	else
-	{
-	    witness_names = witness_names + " + " + witness_name;
-	}
-	total++;
+	    named_witnesses.push_back({node_name, *witness_name});
     }
-
-    if (not witness_names.empty())
+	
+    // 2. Get a maximum of 3 witnesses, preferring the named ones
+    json witnesses;
+    json witness_names;
+    for(auto& w: named_witnesses)
     {
-        //	witness_names  = witness_names + " (" + std::to_string(witnesses.size()) + ")"; // record number of witnesses
-	j["witness_name"] = witness_names;
+	if (witnesses.size() >= max_witnesses) break;
+
+	witnesses.push_back(w.first);
+	if (w.second)
+	    witness_names.push_back(*w.second);
+	else
+	    witness_names.push_back(nullptr);
     }
 
+    // 3. Record the <= 3 conflicting nodes with their names.
+    json j;
+    j["status"] = std::move(status);
+    j["witnesses"] = witnesses;
+    j["witness_names"] = witness_names;
+
+    // 4. Report how many more conflicting nodes there are that we did not represent.
+    int more = named_witnesses.size() - witnesses.size();
+    if (more > 0)
+	j["more"] = more;
+    
     return j;
 }
 
