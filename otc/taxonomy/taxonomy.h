@@ -145,7 +145,8 @@ inline std::vector<int> get_index_vec(std::size_t sz) {
 
 class BaseTaxonomy {
     protected:
-    std::unordered_map<OttId, OttId> forwards;
+    using forwards_map = std::unordered_map<OttId, OttId>;
+    forwards_map forwards;
     OttId keep_root;
     std::bitset<32> cleaning_flags;
     std::string path;
@@ -161,12 +162,19 @@ class BaseTaxonomy {
     const std::string & get_version_number() const {
         return version_number;
     }
+
+    const forwards_map & get_forwards_map() const {
+        return forwards;
+    }
+    friend void read_forwards_file(BaseTaxonomy & , std::string filepath);
+
 };
+
+void read_forwards_file(BaseTaxonomy & , std::string filepath);
 
 class Taxonomy: public std::vector<TaxonomyRecord>, public BaseTaxonomy {
     protected:
     std::unordered_map<OttId, int> index;
-    void read_forwards_file(std::string filepath);
     public:
     template <typename Tree_t> std::unique_ptr<Tree_t> get_tree(std::function<std::string(const TaxonomyRecord&)>) const;
 

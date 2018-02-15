@@ -379,7 +379,7 @@ Taxonomy::Taxonomy(const string& dir,
         read_deprecated_file(path + "/deprecated.tsv");
     }
     */
-    read_forwards_file(path + "/forwards.tsv");
+    read_forwards_file(*this, path + "/forwards.tsv");
 }
 
 RichTaxonomy::RichTaxonomy(const std::string& dir, std::bitset<32> cf, OttId kr)
@@ -417,6 +417,7 @@ RichTaxonomy::RichTaxonomy(const std::string& dir, std::bitset<32> cf, OttId kr)
     set_traversal_entry_exit(*tree);
     _fill_ids_to_suppress_set();
     this->read_synonyms();
+    read_forwards_file(*this, dir + "/forwards.tsv");
     const auto & td = tree->get_data();
     LOG(INFO) << "# of taxa stored in taxonomy, but filtered from taxonomy tree = " << filtered_records.size();
     LOG(INFO) << "last # in ncbi_id_map = " << (td.ncbi_id_map.empty() ? 0 : max_numeric_key(td.ncbi_id_map));
@@ -427,7 +428,7 @@ RichTaxonomy::RichTaxonomy(const std::string& dir, std::bitset<32> cf, OttId kr)
 }
 
 
-void Taxonomy::read_forwards_file(string filepath) {
+void read_forwards_file(BaseTaxonomy & taxonomy,  string filepath) {
     ifstream forwards_stream(filepath);
     if (forwards_stream) {
         string line;
@@ -440,17 +441,17 @@ void Taxonomy::read_forwards_file(string filepath) {
             }
             const char* temp2 = temp+1;
             long new_id = std::strtoul(temp2, &temp, 10);
-            forwards[check_ott_id_size(old_id)] = check_ott_id_size(new_id);
+            taxonomy.forwards[check_ott_id_size(old_id)] = check_ott_id_size(new_id);
         }
     }
     // walk through the full forwards table, and try to find any that are multiple
     //    step paths of forwards.
     unordered_set<OttId> need_iterating;
-    for (auto old_new : forwards) {
+    for (auto old_new : taxonomy.forwards) {
         auto new_id = old_new.second;
         if (new_id >= 0) {
-            OttId nnid = this->map(new_id);
-            if (nnid != new_id) {
+            auto nit = taxonomy.forwards.find(new_id);
+            if (nit != taxonomy.forwards.end() && nit->second != new_id) {
                 need_iterating.insert(old_new.first);
             }
         }
@@ -458,13 +459,16 @@ void Taxonomy::read_forwards_file(string filepath) {
     while (!need_iterating.empty()) {
         unordered_set<OttId> scratch;
         for (auto old_id: need_iterating) {
-            auto fm_it = forwards.find(old_id);
-            assert(fm_it != forwards.end());
+            auto fm_it = taxonomy.forwards.find(old_id);
+            assert(fm_it != taxonomy.forwards.end());
             auto curr_new_id = fm_it->second;
-            OttId nnid = this->map(fm_it->second);
+            auto nit = taxonomy.forwards.find(fm_it->second);
+            assert(nit != taxonomy.forwards.end());
+            OttId nnid = nit->second;
             assert(nnid != fm_it->second);
             fm_it->second = nnid;
-            if (nnid > 0 && nnid != this->map(nnid)) {
+            auto nextit = taxonomy.forwards.find(nnid);
+            if (nextit != taxonomy.forwards.end()  && nnid != nextit->second) {
                 scratch.insert(old_id);
             }
         }

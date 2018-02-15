@@ -256,7 +256,7 @@ bool read_tree_and_annotations(const fs::path & config_path,
         for (json::const_iterator nit = node_obj.begin(); nit != node_obj.end(); ++nit) {
             string k = nit.key();
             bool was_broken = false;
-            const SumTreeNode_t * stn = find_node_by_id_str(tree, k, was_broken);
+            const SumTreeNode_t * stn = find_node_by_id_str(taxonomy.get_forwards_map(), tree, k, was_broken);
             //auto stnit = n2n.find(k);
             if (stn == nullptr) {
                 throw OTCError() << "Node " << k << " from annotations not found in tree.";
@@ -340,11 +340,11 @@ bool read_tree_and_annotations(const fs::path & config_path,
                     attach_id_list.push_back(ai_it.key());
                 }
                 bool was_broken = false;
-                const SumTreeNode_t * mrca_nd = find_node_by_id_str(tree, mrca_id, was_broken);
+                const SumTreeNode_t * mrca_nd = find_node_by_id_str(taxonomy.get_forwards_map(), tree, mrca_id, was_broken);
                 vector<const SumTreeNode_t *> avec;
                 avec.reserve(attach_id_list.size());
                 for (auto attach_id : attach_id_list) {
-                    auto anptr = find_node_by_id_str(tree, attach_id, was_broken);
+                    auto anptr = find_node_by_id_str(taxonomy.get_forwards_map(), tree, attach_id, was_broken);
                     assert(anptr != nullptr);
                     avec.push_back(anptr);
                 }

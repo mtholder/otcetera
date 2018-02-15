@@ -230,7 +230,8 @@ void index_by_name_or_id(T & tree) {
     }
 }
 
-const SumTreeNode_t * find_node_by_id_str(const SummaryTree_t & tree,
+const SumTreeNode_t * find_node_by_id_str(const std::unordered_map<OttId, OttId> & forwards,
+                                          const SummaryTree_t & tree,
                                           const std::string & node_id,
                                           bool & was_broken);
 class TreesToServe {
